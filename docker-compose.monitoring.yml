@@ -1,0 +1,102 @@
+volumes:
+  monitoring_prometheus_data: {}
+  monitoring_grafana_data: {}
+  monitoring_loki_data: {}
+
+services:
+  # Prometheus - Recolección y almacenamiento de métricas
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: monitoring_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./compose/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./compose/monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - monitoring_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'  # Retención de 90 días para análisis post-evento
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  # Grafana - Visualización y dashboards
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: monitoring_grafana
+    restart: unless-stopped
+    volumes:
+      - monitoring_grafana_data:/var/lib/grafana
+      - ./compose/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./compose/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana-elecciones2025.airedesantafe-desarrollos.com.ar
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_LOG_MODE=console
+      - GF_LOG_LEVEL=info
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring
+
+  # Loki - Agregación de logs
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: monitoring_loki
+    restart: unless-stopped
+    volumes:
+      - ./compose/monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - monitoring_loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - monitoring
+
+  # Promtail - Recolector de logs (para este servidor de monitoreo)
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: monitoring_promtail
+    restart: unless-stopped
+    volumes:
+      - ./compose/monitoring/loki/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+  # AlertManager - Gestión de alertas (opcional pero recomendado)
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: monitoring_alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./compose/monitoring/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - "9093:9093"
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge

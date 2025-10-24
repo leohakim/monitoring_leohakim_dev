@@ -1,0 +1,82 @@
+# Este archivo debe ser incluido en los servidores de production y standby
+# Uso: docker compose -f docker-compose.production.yml -f docker-compose.exporters.yml up -d
+# o:   docker compose -f docker-compose.standby.yml -f docker-compose.exporters.yml up -d
+
+services:
+  # cAdvisor - Métricas de contenedores Docker
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: monitoring_cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    command:
+      - '--housekeeping_interval=10s'
+      - '--docker_only=true'
+      - '--store_container_labels=false'
+      - '--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,accelerator,hugetlb,referenced_memory,cpu_topology,resctrl'
+
+  # Node Exporter - Métricas del sistema operativo
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: monitoring_node_exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  # PostgreSQL Exporter - Métricas de base de datos
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: monitoring_postgres_exporter
+    restart: unless-stopped
+    environment:
+      # IMPORTANTE: Ajustar según el entorno (production o standby)
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+
+  # Redis Exporter - Métricas de Redis
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: monitoring_redis_exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+
+  # Promtail - Recolector de logs para Loki
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: monitoring_promtail
+    restart: unless-stopped
+    volumes:
+      - ./compose/monitoring/loki/promtail-remote-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    environment:
+      # IMPORTANTE: Cambiar por la IP del servidor de monitoreo
+      LOKI_URL: "http://IP_MONITORING_SERVER:3100"

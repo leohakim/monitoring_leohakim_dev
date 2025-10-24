@@ -1,0 +1,149 @@
+global:
+  scrape_interval: 15s  # Recolectar métricas cada 15 segundos
+  evaluation_interval: 15s  # Evaluar reglas cada 15 segundos
+  external_labels:
+    cluster: 'elecciones-2025'
+    environment: 'multi-env'
+
+# Configuración de alertas
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Reglas de alertas
+rule_files:
+  - 'alerts.yml'
+
+# Configuración de scraping
+scrape_configs:
+  # ============================================================================
+  # SERVIDOR DE MONITOREO
+  # ============================================================================
+  
+  # Prometheus mismo
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          environment: 'monitoring'
+          server: 'monitoring'
+
+  # ============================================================================
+  # SERVIDOR PRODUCTION
+  # ============================================================================
+
+  # cAdvisor - Métricas de contenedores Docker
+  - job_name: 'cadvisor-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:8080']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'cadvisor'
+
+  # Node Exporter - Métricas del sistema operativo
+  - job_name: 'node-exporter-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:9100']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'node-exporter'
+
+  # PostgreSQL Exporter - Métricas de base de datos
+  - job_name: 'postgres-exporter-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:9187']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'postgres'
+
+  # Redis Exporter - Métricas de Redis
+  - job_name: 'redis-exporter-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:9121']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'redis'
+
+  # Django Metrics - Métricas de la aplicación Django
+  - job_name: 'django-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:8000']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'django'
+    metrics_path: '/metrics'  # Endpoint de métricas de Django
+
+  # Traefik Metrics - Métricas del reverse proxy
+  - job_name: 'traefik-production'
+    static_configs:
+      - targets: ['IP_PRODUCTION:8082']  # CAMBIAR: IP del servidor production
+        labels:
+          environment: 'production'
+          server: 'production'
+          service: 'traefik'
+
+  # ============================================================================
+  # SERVIDOR STANDBY
+  # ============================================================================
+
+  # cAdvisor - Métricas de contenedores Docker
+  - job_name: 'cadvisor-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:8080']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'cadvisor'
+
+  # Node Exporter - Métricas del sistema operativo
+  - job_name: 'node-exporter-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:9100']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'node-exporter'
+
+  # PostgreSQL Exporter - Métricas de base de datos
+  - job_name: 'postgres-exporter-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:9187']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'postgres'
+
+  # Redis Exporter - Métricas de Redis
+  - job_name: 'redis-exporter-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:9121']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'redis'
+
+  # Django Metrics - Métricas de la aplicación Django
+  - job_name: 'django-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:8000']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'django'
+    metrics_path: '/metrics'
+
+  # Traefik Metrics - Métricas del reverse proxy
+  - job_name: 'traefik-standby'
+    static_configs:
+      - targets: ['IP_STANDBY:8082']  # CAMBIAR: IP del servidor standby
+        labels:
+          environment: 'standby'
+          server: 'standby'
+          service: 'traefik'

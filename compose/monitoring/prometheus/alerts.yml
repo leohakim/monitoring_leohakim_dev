@@ -1,0 +1,197 @@
+groups:
+  - name: elecciones_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # ALERTAS DE DISPONIBILIDAD
+      # ========================================================================
+      
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Servicio {{ $labels.job }} caído"
+          description: "El servicio {{ $labels.job }} en {{ $labels.server }} ha estado caído por más de 2 minutos."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta tasa de errores 5xx"
+          description: "Tasa de errores 5xx mayor al 5% en {{ $labels.server }}."
+
+      # ========================================================================
+      # ALERTAS DE RECURSOS - CPU
+      # ========================================================================
+      
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de CPU"
+          description: "CPU en {{ $labels.instance }} está sobre 80% por más de 10 minutos (actual: {{ $value }}%)."
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uso crítico de CPU"
+          description: "CPU en {{ $labels.instance }} está sobre 95% (actual: {{ $value }}%)."
+
+      # ========================================================================
+      # ALERTAS DE RECURSOS - MEMORIA
+      # ========================================================================
+      
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de memoria"
+          description: "Memoria en {{ $labels.instance }} está sobre 85% (actual: {{ $value }}%)."
+
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uso crítico de memoria"
+          description: "Memoria en {{ $labels.instance }} está sobre 95% (actual: {{ $value }}%)."
+
+      # ========================================================================
+      # ALERTAS DE RECURSOS - DISCO
+      # ========================================================================
+      
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"})) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de disco"
+          description: "Disco {{ $labels.mountpoint }} en {{ $labels.instance }} está sobre 80% (actual: {{ $value }}%)."
+
+      - alert: CriticalDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Uso crítico de disco"
+          description: "Disco {{ $labels.mountpoint }} en {{ $labels.instance }} está sobre 90% (actual: {{ $value }}%)."
+
+      # ========================================================================
+      # ALERTAS DE BASE DE DATOS
+      # ========================================================================
+      
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL caído"
+          description: "PostgreSQL en {{ $labels.server }} no está respondiendo."
+
+      - alert: PostgreSQLTooManyConnections
+        expr: sum by (instance) (pg_stat_activity_count) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Demasiadas conexiones a PostgreSQL"
+          description: "PostgreSQL en {{ $labels.instance }} tiene {{ $value }} conexiones activas."
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_activity_max_tx_duration[5m]) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queries lentas en PostgreSQL"
+          description: "Hay queries que tardan más de 60 segundos en {{ $labels.instance }}."
+
+      # ========================================================================
+      # ALERTAS DE REDIS
+      # ========================================================================
+      
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis caído"
+          description: "Redis en {{ $labels.server }} no está respondiendo."
+
+      - alert: RedisHighMemoryUsage
+        expr: (redis_memory_used_bytes / redis_memory_max_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Uso alto de memoria en Redis"
+          description: "Redis en {{ $labels.instance }} está usando {{ $value }}% de su memoria máxima."
+
+      # ========================================================================
+      # ALERTAS DE APLICACIÓN DJANGO
+      # ========================================================================
+      
+      - alert: DjangoHighResponseTime
+        expr: histogram_quantile(0.95, rate(django_http_requests_latency_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tiempo de respuesta alto en Django"
+          description: "El p95 de latencia en {{ $labels.server }} es {{ $value }}s (>2s)."
+
+      - alert: CeleryQueueBacklog
+        expr: celery_tasks_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cola de Celery con backlog"
+          description: "Hay {{ $value }} tareas pendientes en la cola de Celery en {{ $labels.server }}."
+
+      # ========================================================================
+      # ALERTAS DE CONTENEDORES
+      # ========================================================================
+      
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Contenedor con alto uso de CPU"
+          description: "Contenedor {{ $labels.name }} en {{ $labels.server }} está usando {{ $value }}% de CPU."
+
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Contenedor con alto uso de memoria"
+          description: "Contenedor {{ $labels.name }} en {{ $labels.server }} está usando {{ $value }}% de su límite de memoria."
+
+      - alert: ContainerRestarting
+        expr: rate(container_last_seen{name!=""}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Contenedor reiniciándose"
+          description: "Contenedor {{ $labels.name }} en {{ $labels.server }} se está reiniciando frecuentemente."
